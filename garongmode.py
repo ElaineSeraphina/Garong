@@ -22,13 +22,21 @@ def download_file():
         # Menyimpan file dengan timestamp di nama file
         with open(save_path, 'wb') as file:
             file.write(response.content)
-        print(f"File berhasil didownload dan disimpan di: {save_path}")
+        print(f"\nFile berhasil didownload dan disimpan di: {save_path}")
 
     except requests.exceptions.RequestException as e:
-        print("Terjadi kesalahan saat mendownload file:", e)
+        print("\nTerjadi kesalahan saat mendownload file:", e)
 
-# Loop untuk melakukan download setiap 5 menit
+# Loop untuk melakukan download setiap 5 menit dengan tampilan countdown
 while True:
     download_file()
     print("Menunggu 5 menit sebelum download berikutnya...")
-    time.sleep(300)  # Menunggu 300 detik (5 menit)
+
+    # Countdown selama 5 menit (300 detik)
+    for remaining in range(300, 0, -1):
+        mins, secs = divmod(remaining, 60)
+        time_format = f"{mins:02}:{secs:02}"
+        print(f"\rWaktu tersisa untuk download berikutnya: {time_format}", end="")
+        time.sleep(1)
+
+    print()  # Baris baru setelah countdown selesai
