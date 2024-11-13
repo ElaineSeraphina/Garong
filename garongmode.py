@@ -1,28 +1,43 @@
 import requests
 import time
 from datetime import datetime
+import os
 
 # URL dari file di GitHub
 url = "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/all/data.txt"
 
-# Folder penyimpanan
-save_folder = "/data/data/com.termux/files/home/storage/shared/Proxy/"
+# Path file penyimpanan tunggal
+save_path = "/data/data/com.termux/files/home/storage/shared/Proxy/file_proxy.txt"
 
-# Fungsi untuk mendownload file dengan timestamp di namanya
+# Fungsi untuk membaca konten file
+def read_file_content(file_path):
+    try:
+        with open(file_path, 'rb') as file:
+            return file.read()
+    except FileNotFoundError:
+        # Jika file belum ada, maka anggap konten kosong
+        return None
+
+# Fungsi untuk mendownload dan memperbarui file jika konten berubah
 def download_file():
     try:
-        # Mendapatkan waktu sekarang untuk keterangan pada nama file
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_path = f"{save_folder}file_{timestamp}.txt"
-
-        # Mendownload file
+        # Mendapatkan konten file dari URL
         response = requests.get(url)
         response.raise_for_status()  # Memeriksa apakah ada kesalahan dalam pengunduhan
+        new_content = response.content
 
-        # Menyimpan file dengan timestamp di nama file
-        with open(save_path, 'wb') as file:
-            file.write(response.content)
-        print(f"\nFile berhasil didownload dan disimpan di: {save_path}")
+        # Mengecek konten file sebelumnya
+        old_content = read_file_content(save_path)
+
+        # Memperbarui file hanya jika konten berbeda
+        if old_content == new_content:
+            print("\nKonten file sama seperti sebelumnya. Tidak ada perubahan.")
+        else:
+            with open(save_path, 'wb') as file:
+                file.write(new_content)
+            # Menambahkan timestamp ke output untuk menunjukkan waktu pembaruan terakhir
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"\nFile berhasil diperbarui pada: {timestamp}")
 
     except requests.exceptions.RequestException as e:
         print("\nTerjadi kesalahan saat mendownload file:", e)
