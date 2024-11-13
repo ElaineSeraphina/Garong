@@ -7,14 +7,12 @@ from datetime import datetime
 import re
 
 # Konfigurasi
-CHECK_INTERVAL = 300  # Interval pengecekan (5 menit)
+CHECK_INTERVAL = 300  # Waktu cek (5 menit)
 URL = "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/all/data.txt"
 SAVE_PATH = "/data/data/com.termux/files/home/storage/shared/Proxy/file_proxy.txt"
 METADATA_PATH = "/data/data/com.termux/files/home/storage/shared/Proxy/metadata.txt"
 METADATA_BACKUP_PATH = "/data/data/com.termux/files/home/storage/shared/Proxy/metadata_backup.txt"
 VALID_PROXY_FORMATS = [r"^http://", r"^socks4://", r"^socks5://"]
-TELEGRAM_TOKEN = "7972140545:AAGBfWPK5OMRZbdDRZt8M9n-k6AWLKVsfwE"
-TELEGRAM_CHAT_ID = "6470829555"
 
 # Logging setup
 logging.basicConfig(
@@ -22,17 +20,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
-
-# Fungsi untuk mengirim notifikasi Telegram
-def send_telegram_notification(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
-    try:
-        response = requests.post(url, data=payload, timeout=10)
-        response.raise_for_status()
-        logging.info("Notifikasi Telegram dikirim.")
-    except Exception as e:
-        logging.error(f"Gagal mengirim notifikasi Telegram: {e}")
 
 # Fungsi untuk membaca metadata dari file
 def read_metadata():
@@ -48,7 +35,7 @@ def save_metadata(metadata):
     with open(METADATA_PATH, 'w') as file:
         file.write(metadata)
 
-# Fungsi untuk memvalidasi format proxy
+# Fungsi untuk memvalidasi konten proxy
 def validate_proxy_content(content):
     proxies = content.splitlines()
     valid_proxies = []
@@ -57,7 +44,7 @@ def validate_proxy_content(content):
             valid_proxies.append(proxy)
     return valid_proxies
 
-# Fungsi untuk uji konektivitas proxy (threading)
+# Fungsi untuk uji konektivitas proxy (fungsi threading)
 def test_proxy(proxy, active_proxies):
     proxy_type = proxy.split("://")[0]
     proxies = {proxy_type: proxy}
@@ -128,25 +115,18 @@ def download_file():
         logging.info(f"File berhasil diperbarui pada {timestamp}")
         print(f"\nFile berhasil diperbarui pada: {timestamp}")
 
-        # Kirim notifikasi Telegram
-        send_telegram_notification(f"File proxy diperbarui pada: {timestamp}")
-
     except requests.ConnectionError:
         logging.error("Koneksi internet gagal.")
         print("\nKoneksi internet gagal.")
-        send_telegram_notification("Koneksi internet gagal saat memperbarui proxy.")
     except requests.Timeout:
         logging.error("Permintaan ke server waktu habis.")
         print("\nPermintaan ke server waktu habis.")
-        send_telegram_notification("Permintaan ke server waktu habis saat memperbarui proxy.")
     except requests.HTTPError as e:
         logging.error(f"HTTP error: {e}")
         print(f"\nHTTP error: {e}")
-        send_telegram_notification(f"HTTP error saat memperbarui proxy: {e}")
     except Exception as e:
         logging.error(f"Kesalahan umum: {e}")
         print(f"\nKesalahan umum: {e}")
-        send_telegram_notification(f"Kesalahan umum saat memperbarui proxy: {e}")
 
 # Fungsi untuk menunggu interval dengan countdown
 def wait_interval():
