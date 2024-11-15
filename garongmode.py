@@ -2,6 +2,9 @@ import requests
 import time
 from datetime import datetime
 import os
+import logging
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 # URL dari file di GitHub
 url = "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/all/data.txt"
@@ -9,6 +12,13 @@ url = "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/a
 # Path file penyimpanan tunggal dan metadata
 save_path = "/data/data/com.termux/files/home/storage/shared/Proxy/file_proxy.txt"
 metadata_path = "/data/data/com.termux/files/home/storage/shared/Proxy/metadata.txt"
+
+# Setup logging
+logging.basicConfig(
+    filename="download_log.txt",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # Fungsi untuk membaca metadata dari file metadata
 def read_metadata():
@@ -22,75 +32,68 @@ def save_metadata(metadata):
     with open(metadata_path, 'w') as file:
         file.write(metadata)
 
+# Setup session dengan retry
+def requests_session_with_retries(retries=3, backoff_factor=0.3, status_forcelist=(500, 502, 504)):
+    session = requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
 # Fungsi untuk mendownload dan memperbarui file jika konten berubah
 def download_file():
+    session = requests_session_with_retries()  # Membuat sesi dengan retry otomatis
+
     try:
-        # Membaca metadata sebelumnya
         old_metadata = read_metadata()
-
-        # Jika metadata tidak ada, artinya ini pertama kali dijalankan
-        if old_metadata is None:
-            response = requests.head(url)
-            response.raise_for_status()  # Memeriksa apakah ada kesalahan dalam permintaan
-
-            # Mendapatkan ETag atau Last-Modified dari header respons
-            new_metadata = response.headers.get('ETag') or response.headers.get('Last-Modified')
-
-            # Menanyakan ke pengguna apakah ingin mendownload file jika ada pembaruan
-            print("Pemeriksaan file pembaruan di sumber...")
-            if new_metadata:
-                print("File pembaruan ditemukan di sumber. Apakah Anda ingin mendownloadnya? (y/n)")
-                user_input = input().strip().lower()
-                
-                if user_input == 'y':
-                    # Melakukan download file jika pengguna setuju
-                    response = requests.get(url)
-                    response.raise_for_status()  # Memeriksa apakah ada kesalahan dalam pengunduhan
-
-                    # Menyimpan konten baru ke file dan menyimpan metadata
-                    with open(save_path, 'wb') as file:
-                        file.write(response.content)
-
-                    save_metadata(new_metadata)  # Menyimpan metadata baru
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    print(f"\nFile berhasil diunduh dan disimpan pada: {timestamp}")
-                else:
-                    print("\nTidak ada pembaruan yang diunduh. Menunggu pengecekan berikutnya...")
-            else:
-                print("\nTidak ada pembaruan di sumber.")
-            return
-
-        # Melakukan permintaan HEAD untuk mendapatkan metadata terbaru
-        response = requests.head(url)
-        response.raise_for_status()  # Memeriksa apakah ada kesalahan dalam permintaan
+        
+        # Permintaan HEAD untuk mendapatkan metadata
+        response = session.head(url, timeout=10)
+        response.raise_for_status()
 
         # Mendapatkan ETag atau Last-Modified dari header respons
         new_metadata = response.headers.get('ETag') or response.headers.get('Last-Modified')
 
-        # Mengecek apakah metadata sudah berubah
-        if new_metadata == old_metadata:
-            print("\nKonten file di sumber tidak berubah. Tidak perlu mendownload.")
+        if old_metadata == new_metadata:
+            logging.info("Konten file di sumber tidak berubah. Tidak perlu mendownload.")
+            print("Konten file di sumber tidak berubah. Tidak perlu mendownload.")
             return
 
-        # Jika berubah, maka lakukan download file baru
-        response = requests.get(url)
-        response.raise_for_status()  # Memeriksa apakah ada kesalahan dalam pengunduhan
+        # Jika berubah, unduh file baru
+        logging.info("Pembaruan terdeteksi. Mengunduh file...")
+        file_response = session.get(url, timeout=20)
+        file_response.raise_for_status()
 
-        # Menyimpan konten baru ke file dan memperbarui metadata
+        # Menyimpan file dan metadata baru
         with open(save_path, 'wb') as file:
-            file.write(response.content)
+            file.write(file_response.content)
 
-        save_metadata(new_metadata)  # Menyimpan metadata baru
+        save_metadata(new_metadata)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"\nFile berhasil diperbarui pada: {timestamp}")
+        
+        # Menampilkan notifikasi keberhasilan di terminal dan log
+        success_message = f"File berhasil diperbarui pada: {timestamp}"
+        logging.info(success_message)
+        print(success_message)  # Menampilkan notifikasi di terminal
 
-    except requests.exceptions.RequestException as e:
-        print("\nTerjadi kesalahan saat mendownload file:", e)
+    except requests.ConnectionError:
+        logging.error("Kesalahan koneksi. Memastikan jaringan stabil dan mencoba ulang.")
+    except requests.Timeout:
+        logging.error("Permintaan melebihi batas waktu. Periksa koneksi Anda.")
+    except requests.RequestException as e:
+        logging.error(f"Terjadi kesalahan saat mendownload file: {e}")
 
-# Loop untuk melakukan pengecekan dan download setiap 5 menit dengan tampilan countdown
+# Loop untuk melakukan pengecekan dan download setiap 5 menit dengan countdown
 while True:
     download_file()
-    print("Menunggu 5 menit sebelum pengecekan berikutnya...")
+    logging.info("Menunggu 5 menit sebelum pengecekan berikutnya...")
 
     # Countdown selama 5 menit (300 detik)
     for remaining in range(300, 0, -1):
